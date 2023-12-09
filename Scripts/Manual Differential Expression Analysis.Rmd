@@ -1,0 +1,93 @@
+---
+title: "Manual Differential Expression"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+```{r Calling libraries}
+
+library(matrixTests)
+library(genefilter)
+```
+
+```{r Loading Gene Expression Data}
+
+count <- as.matrix(read.csv("bladder_counts.csv", row.names = 1))
+sample_sheet <- read.csv("bladder_sample_sheet.csv", row.names = 1)
+```
+
+```{r Dim of Count}
+
+dim(count)
+```
+
+```{r Explore if is There any Missing Expression Value}
+
+sum(is.null(count))
+```
+
+```{r Exploring Data Distribution Using Histogram Plot}
+
+hist(x = count, col = "orange", main = "Histogram")
+```
+
+```{r Scaling the Data using log2 Transformation for Better Visualization}
+#using (+1) to avoid the infinity character when we log zero value
+
+hist(x = log2(count+1), col = "orange", main = "Histogram")
+```
+
+```{r Filter Low Count Genes Which have Row Mean Lower Than 1}
+
+count <- count[rowMeans(count) > 1,]
+```
+
+```{r Calculating Fold Change}
+
+#the difference between logged means equal to the fold change insted of using division of unlogged data
+
+norm_mean <- apply(log2(count+1)[,1:19], 1, mean)
+tum_mean <- apply(log2(count+1)[,20:428], 1, mean)
+fold <- norm_mean-tum_mean
+```
+
+```{r View the Distribution of Fold Change}
+
+hist(fold)
+```
+
+```{r Doing the Differential Expression Statistical Testing}
+
+#create a phenotype table as its row contain either tumor or normal corresponding to th column in the expression data,
+#so as we know that the first 19 column in the expression data are normal, so the first 19 row in the phenotype will be labeled as: norm and,
+#other will be tum.
+
+phenotype <- as.data.frame(factor(rep(c("norm","tum"),c(19,409))))
+colnames(phenotype) <- "grouping"
+```
+
+```{r Making the Hypothesis Testing using T test for Each Row (gene)}
+
+t <- rowttests(count, phenotype$grouping)
+```
+
+```{r Correct the T test P value using FDR method}
+
+p_adj <- p.adjust(t$p.value, method = "fdr")
+```
+
+```{r Save the Result in a Data Frame Contain the Fold Change and P Adjusted value}
+
+result <- as.data.frame(cbind(fold, p_adj))
+```
+
+```{r Choose the Statstical Significant Differentaily Expressed Genes (DEGs)}
+
+res_deg <- result[(result$p_adj) < 0.05 & abs(result$fold) > 2,]
+```
+
+```{r Save the Result}
+
+write.csv(as.matrix(res_deg), file = "res_deg.csv", quote = F, row.names = T)
+```
